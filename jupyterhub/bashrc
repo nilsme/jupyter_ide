@@ -1,0 +1,7 @@
+
+if [ ! -d ${HOME}/.julia ]
+then
+  conda init
+  julia -e 'using Pkg; Pkg.add("IJulia")'
+  exec bash -l
+fi

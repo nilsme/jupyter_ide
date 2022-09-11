@@ -1,0 +1,65 @@
+version: '3'
+services:
+
+  proxy:
+    image: ${REGISTRY}/jupyter_proxy
+    container_name: jupyter_proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.services.traefik.loadbalancer.server.port=8080
+      - traefik.http.routers.traefik.tls=true
+      - traefik.http.routers.traefik.rule=(PathPrefix(`/traefik/`) || Headers(`Referer`, `https://${HOST}/traefik/dashboard/`))
+      - traefik.http.routers.traefik.service=api@internal
+      - traefik.http.routers.traefik.middlewares=strip-traefik
+      - traefik.http.middlewares.strip-traefik.stripprefix.prefixes=/traefik
+    restart: unless-stopped
+    command:
+      - "--api"
+      - "--api.insecure=true"
+      - "--providers.docker"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - hub-net
+
+  jupyterhub:
+    image: ${REGISTRY}/jupyter_jupyterhub
+    container_name: jupyter_jupyterhub
+    labels:
+      - traefik.enable=true
+      - traefik.http.services.jupyterhub.loadbalancer.server.port=8000
+      - traefik.http.routers.jupyterhub.tls=true
+      - traefik.http.routers.jupyterhub.rule=Host(`${HOST}`) && (PathPrefix(`/jupyterhub/`) || PathPrefix(`/hub/`) || PathPrefix(`/user/`))
+      - traefik.http.routers.jupyterhub.middlewares=strip-jupyterhub@docker
+      - traefik.http.middlewares.strip-jupyterhub.stripprefix.prefixes=/jupyterhub
+    restart: unless-stopped
+    privileged: true
+    stdin_open: true
+    tty: true
+    networks:
+      - hub-net
+    depends_on:
+      - nfs
+
+  nfs:
+    image: ${REGISTRY}/jupyter_nfs
+    container_name: jupyter_nfs
+    restart: unless-stopped
+    privileged: true
+    environment:
+      - SHARED_DIRECTORY=/data
+    volumes:
+      - NFS_FOLDER:/data
+    networks:
+      - hub-net
+
+networks:
+  hub-net:
+
+volumes:
+  NFS_FOLDER:
